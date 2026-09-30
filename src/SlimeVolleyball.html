@@ -1,0 +1,482 @@
+WindowSize 730, 365
+SlimeVolleyball.html:202 xRatio 0.73, yRatio 0.73
+SlimeVolleyball.html:206 pixelsPerUnit = 0.73 (no adjust)
+908
+Slime.js:17 Uncaught ReferenceError: courtY is not defined
+    at Object.render (Slime.js:17:20)
+    at renderGame (SlimeVolleyball.html:162:12)
+var training = window.RLEnvironment.startLiveTrainingVsAI({
+  agent: {
+    alpha: 0.2,
+    gamma: 0.95,
+    epsilon: 0.3,
+    minEpsilon: 0.05,
+    epsilonDecay: 0.995,
+    optimisticValue: 1.5
+  },
+  stepMs: 100
+});
+undefined
+2926
+Slime.js:17 Uncaught ReferenceError: courtY is not defined
+    at Object.render (Slime.js:17:20)
+    at renderGame (SlimeVolleyball.html:162:12)
+render	@	Slime.js:17
+renderGame	@	SlimeVolleyball.html:162
+requestAnimationFrame		
+gameIteration	@	SlimeVolleyball.html:174
+setInterval		
+bodyload	@	SlimeVolleyball.html:329
+onload	@	SlimeVolleyball.html:335<html><head>
+<script type="text/javascript" src="Slime.js"></script>
+<script type="text/javascript" src="Input.js"></script>
+<script type="text/javascript" src="SlimeAI.js"></script>
+<script type="text/javascript" src="RLEnvironment.js"></script>
+<script type="text/javascript">
+  // RENDER DATA
+  var ctx;
+  var canvas;
+  var gameWidth,gameHeight;
+  var pixelsPerUnit;
+  var courtY;
+  var updatesToPaint;
+
+
+  // GAME DATA
+  var ball;
+  var slime1;
+  var slime2;
+  var slime1Score;
+  var slime2Score;  
+  
+  // Game Update Functions
+  function updateSlimeVelocities(s,left,right,up) {
+    // update velocities
+    if(keysDown[left]) {
+      if(keysDown[right]) {
+        s.velocityX = 0;
+      } else {
+        s.velocityX = -8;
+      }
+    } else if(keysDown[right]) {
+      s.velocityX = 8;
+    } else {
+      s.velocityX = 0;
+    }
+    if(s.y == 0 && keysDown[up]) {
+      //s.velocityY = 31;
+      s.velocityY = 18;
+    }
+  }
+  function updateSlime(s, leftLimit, rightLimit) {
+    if(s.velocityX != 0) {
+      s.x += s.velocityX;
+      if(s.x - s.radius < leftLimit) {
+        s.x = leftLimit + s.radius;
+      } else if(s.x + s.radius > rightLimit) {
+        s.x = rightLimit - s.radius;
+      }
+    }
+    if(s.velocityY != 0 || s.y > 0) {
+      s.y += s.velocityY;
+      s.velocityY -= 1.2;
+      if(s.y < 0) {
+        s.y = 0;
+        s.velocityY = 0;
+      }
+    }
+  }
+
+  var MAX_VELOCITY_X = 15;
+  var MAX_VELOCITY_Y = 11;
+  function collisionBallSlime(s) {
+    var dx = ball.x - s.x;
+    var dy = ball.y - s.y;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    //console.log("dist = " + dist);
+
+    var dVelocityX = ball.velocityX - s.velocityX;
+    var dVelocityY = ball.velocityY - s.velocityY;
+
+    if(dy > 0 && dist < ball.radius + s.radius) {
+      var oldBall = {x:ball.x,y:ball.y,velocityX:ball.velocityX,velocityY:ball.velocityY};
+
+      ball.x = s.x + (s.radius + ball.radius) * dx / dist;
+      ball.y = s.y + (s.radius + ball.radius) * dy / dist;
+      
+      var something = (dx * dVelocityX + dy * dVelocityY) / dist;
+      if(something <= 0) {
+        ball.velocityX += s.velocityX - 1.92 * dx * something / dist;
+        ball.velocityY += s.velocityY - 1.92 * dy * something / dist;
+        if(     ball.velocityX < -MAX_VELOCITY_X) ball.velocityX = -MAX_VELOCITY_X;
+        else if(ball.velocityX >  MAX_VELOCITY_X) ball.velocityX =  MAX_VELOCITY_X;
+        if(     ball.velocityY < -MAX_VELOCITY_Y) ball.velocityY = -MAX_VELOCITY_Y;
+        else if(ball.velocityY >  MAX_VELOCITY_Y) ball.velocityY =  MAX_VELOCITY_Y;
+      }
+      /*
+      console.log("Collision something: " + something +
+                  ", dy: " + dy +
+                  ", dist: " + dist + ", y:" + oldBall.y + ">" + ball.y +
+                  ", velocityY: " + oldBall.velocityY + ">" + ball.velocityY);*/
+    }    
+  }
+  function updateBall() {
+    ball.x += ball.velocityX;
+    ball.y += ball.velocityY;
+
+    ball.velocityY += -.5; // gravity
+    if(ball.velocityY < -MAX_VELOCITY_Y) {
+      ball.velocityY = -MAX_VELOCITY_Y;
+    }
+
+    // Net collision: the center line acts like a solid wall for the ball.
+    var netX = 500;
+    var netTopY = 140;
+    var netHalfWidth = 10;
+    var netNotch = 4;
+    var ballNearNet = Math.abs(ball.x - netX) < ball.radius + netHalfWidth;
+    var ballBelowNet = ball.y < netTopY;
+
+    if (ballNearNet && ballBelowNet) {
+      if (ball.x < netX && ball.velocityX > 0) {
+        ball.x = netX - ball.radius - netHalfWidth - netNotch;
+        ball.velocityX *= -0.9;
+      } else if (ball.x > netX && ball.velocityX < 0) {
+        ball.x = netX + ball.radius + netHalfWidth + netNotch;
+        ball.velocityX *= -0.9;
+      }
+
+      if (ball.y < netTopY && ball.velocityY < 0) {
+        ball.y = netTopY;
+        ball.velocityY *= -0.8;
+      }
+    }
+
+    collisionBallSlime(slime1);
+    collisionBallSlime(slime2);
+
+    // detect wall collisions
+    if(ball.x - ball.radius < 0) {
+      ball.x = ball.radius;
+      ball.velocityX = -ball.velocityX;
+    }
+    else if(ball.x + ball.radius > 1000) {
+      ball.x = 1000 - ball.radius;
+      ball.velocityX = -ball.velocityX;
+    }
+
+    if(ball.y < 0) {
+      if(ball.x > 500) {
+        slime1Score++;
+        initRound(true);
+      } else {
+        slime2Score++;
+        initRound(false);
+      }
+    }
+  }
+  function updateOpponentAI() {
+    if (!window.currentOpponentAI || typeof window.currentOpponentAI.move !== 'function') {
+      updateSlimeVelocities(slime2, KEY_LEFT,KEY_RIGHT,KEY_UP);
+      return;
+    }
+
+    slimeLeft = slime1;
+    slimeRight = slime2;
+    window.currentOpponentAI.move();
+
+    if (window.currentOpponentAI.movement === 1) {
+      slime2.velocityX = -8;
+    } else if (window.currentOpponentAI.movement === 2) {
+      slime2.velocityX = 8;
+    } else {
+      slime2.velocityX = 0;
+    }
+
+    if (window.currentOpponentAI.jumpSet && slime2.y === 0) {
+      slime2.velocityY = 18;
+    }
+  }
+
+  function updateFrame() {
+    updateSlimeVelocities(slime1, KEY_A,KEY_D,KEY_W);
+    updateOpponentAI();
+
+    // Keep each player on their own side of the net.
+    updateSlime(slime1, 0, 495);
+    updateSlime(slime2, 505, 1000);
+
+    updateBall();
+  }
+
+
+  // Rendering Functions
+  function renderBackground()
+  {
+    var courtHeight = gameHeight/5;
+    ctx.fillStyle='#0077ff'
+    ctx.fillRect(0, 0, gameWidth, gameHeight-courtHeight);
+    ctx.fillStyle='#ca6'
+    ctx.fillRect(0, gameHeight-courtHeight, gameWidth, courtHeight);
+
+    // Render the central volleyball net visibly across the court.
+    ctx.fillStyle='#fff';
+    ctx.fillRect(gameWidth/2 - 2, 0, 4, gameHeight - courtHeight + 8);
+
+    // Slightly darker guide line so it stays visible on bright backgrounds.
+    ctx.fillStyle='#dfe8ff';
+    ctx.fillRect(gameWidth/2 - 1, 0, 2, gameHeight - courtHeight + 8);
+  }
+
+  
+  // GAME CODE
+  function renderGame() {
+    if(updatesToPaint == 0) {
+      console.log("WARNING: render called but not ready to paint");
+    } else {
+      if(updatesToPaint > 1) {
+        console.log("WARNING: render missed " + (updatesToPaint - 1) + " frame(s)");
+      }
+      renderBackground();
+      ctx.font = "20px Georgia";
+      ctx.fillText("Score: " + slime1Score, 0, 20);
+      ctx.fillText("Score: " + slime2Score, gameWidth - 200, 20);
+      ball.render();
+      slime1.render();
+      slime2.render();
+      updatesToPaint = 0;
+    }
+  }
+  function gameIteration() {
+    if(updatesToPaint > 0) {
+      console.log("WARNING: updating frame before it was rendered");
+    }
+    updateFrame();
+    updatesToPaint++;
+    requestAnimationFrame(renderGame);
+  }
+
+  function initRound(server) {
+    ball.x = server ? 200 : 800;
+    ball.y = 200;
+    ball.velocityX = 0;
+    ball.velocityY = 0;
+
+    slime1.x = 200;
+    slime1.y = 0;
+    slime1.velocityX = 0;
+    slime1.velocityY = 0;
+
+    slime2.x = 800;
+    slime2.y = 0;
+    slime2.velocityX = 0;
+    slime2.velocityY = 0;
+  }
+
+  function updateWindowSize(width,height) {
+    gameWidth = width;
+    gameHeight = height;
+    courtY = gameHeight;
+
+    console.log("WindowSize " + width + ", " + height);
+
+    var pixelsPerUnitX = gameWidth  / 1000;
+    var pixelsPerUnitY = gameHeight / 500;
+    console.log("xRatio " + pixelsPerUnitX + ", yRatio " + pixelsPerUnitY);
+
+    if(pixelsPerUnitX == pixelsPerUnitY) {
+      pixelsPerUnit = pixelsPerUnitX;
+      console.log("pixelsPerUnit = " + pixelsPerUnit + " (no adjust)");
+    } else if(pixelsPerUnitX < pixelsPerUnitY) {
+      pixelsPerUnit = pixelsPerUnitX;
+      gameHeight = gameWidth / 2;
+      console.log("pixelsPerUnit = " + pixelsPerUnit + " (adjust to X, newHeight=" + gameHeight + ")");
+    } else {
+      pixelsPerUnit = pixelsPerUnitX;
+      gameWidth = gameHeight * 2;
+      console.log("pixelsPerUnit = " + pixelsPerUnit + " (adjust to Y)");
+    }
+  }
+
+  function bodyload() {
+    // Create Render objects
+    var canvas = document.createElement("canvas");
+    ctx = canvas.getContext("2d");
+    canvas.width = 730;
+    //canvas.height = 375; original
+    canvas.height = 365;
+    //canvas.height = 730;
+
+    // Setup Render Data
+    updateWindowSize(canvas.width,canvas.height);
+    document.body.appendChild(canvas);
+
+    // Initialize Game Data
+    ball   = newBall( 15 ,'#ff0');
+    slime1 = newSlime(50,'#f00');
+    slime2 = newSlime(50,'#0f0');
+
+    // The built-in AI expects these globals to exist.
+    slimeLeft = slime1;
+    slimeRight = slime2;
+
+    slime1Score = 0;
+    slime2Score = 0;
+
+    initRound(true);
+
+    // Minimal RL bridge hook: expose a tiny random agent demo.
+    if (typeof window !== 'undefined' && window.RLEnvironment) {
+      window.rngEnv = window.RLEnvironment.createEnvironment();
+      window.runRandomAgentDemo = function() {
+        var env = window.rngEnv;
+        var state = env.reset(true);
+        var totalReward = 0;
+        console.log('RL env ready. Starting random-agent demo...');
+        for (var stepIndex = 0; stepIndex < 20; stepIndex++) {
+          var action = Math.random() < 1/3 ? 0 : (Math.random() < 0.5 ? 1 : 2);
+          var result = env.step(action);
+          totalReward += result.reward;
+          console.log('step=' + stepIndex + ', action=' + action + ', reward=' + result.reward + ', done=' + result.done + ', state=' + JSON.stringify(result.next_state));
+          if (result.done) {
+            console.log('Episode ended after ' + (stepIndex + 1) + ' steps. Total reward=' + totalReward);
+            state = env.reset(true);
+            totalReward = 0;
+          }
+        }
+      };
+
+      window.startRLTrainingVsAI = function(options) {
+        options = options || {};
+        var agentOptions = options.agent || {};
+        var aiFactory = options.aiFactory || null;
+        var updateMs = options.updateMs || 100;
+
+        var ai = null;
+        if (aiFactory) {
+          ai = aiFactory();
+        } else if (typeof window.newSlimeAI === 'function' && typeof window.setPatheticWhiteSlime === 'function') {
+          ai = newSlimeAI(false, 'Pathetic White Slime');
+          setPatheticWhiteSlime(ai);
+        }
+
+        window.currentOpponentAI = ai;
+
+        var env = window.RLEnvironment.createEnvironment({ opponentController: ai ? {
+          onReset: function() {
+            slimeLeft = slime1;
+            slimeRight = slime2;
+          },
+          move: function() {
+            if (!ai || typeof ai.move !== 'function') {
+              return;
+            }
+            slimeLeft = slime1;
+            slimeRight = slime2;
+            ai.move();
+          }
+        } : null });
+
+        var agent = window.RLEnvironment.createOptimisticEpsilonGreedyAgent(env, agentOptions);
+        var state = env.reset(true);
+        var episode = 0;
+        var totalReward = 0;
+        var steps = 0;
+        var intervalId = null;
+
+        intervalId = setInterval(function() {
+          var action = agent.chooseAction(state);
+          var result = env.step(action);
+          agent.update(state, action, result.reward, result.next_state, result.done);
+          totalReward += result.reward;
+          steps += 1;
+          state = result.next_state;
+
+          if (result.done) {
+            episode += 1;
+            console.log('EP ' + episode + ' reward=' + totalReward + ' steps=' + steps + ' epsilon=' + agent.getEpsilon());
+            totalReward = 0;
+            steps = 0;
+            state = env.reset(true);
+          }
+        }, updateMs);
+
+        return {
+          env: env,
+          agent: agent,
+          stop: function() {
+            clearInterval(intervalId);
+          }
+        };
+      };
+
+      window.startTwoAgentTraining = function(options) {
+        options = options || {};
+        var leftOptions = options.leftAgent || {
+          alpha: 0.2,
+          gamma: 0.95,
+          epsilon: 0.3,
+          minEpsilon: 0.05,
+          epsilonDecay: 0.995,
+          optimisticValue: 1.5
+        };
+        var rightOptions = options.rightAgent || {
+          alpha: 0.2,
+          gamma: 0.95,
+          epsilon: 0.3,
+          minEpsilon: 0.05,
+          epsilonDecay: 0.995,
+          optimisticValue: 1.5
+        };
+        var updateMs = options.stepMs || 100;
+
+        var env = window.RLEnvironment.createEnvironment();
+        var leftAgent = window.RLEnvironment.createOptimisticEpsilonGreedyAgent(env, leftOptions);
+        var rightAgent = window.RLEnvironment.createOptimisticEpsilonGreedyAgent(env, rightOptions);
+        var state = env.reset(true);
+        var episode = 0;
+        var steps = 0;
+        var leftWins = 0;
+        var rightWins = 0;
+        var intervalId = null;
+
+        intervalId = setInterval(function() {
+          var leftAction = leftAgent.chooseAction(state);
+          var rightAction = rightAgent.chooseAction(state);
+          var result = env.step([leftAction, rightAction]);
+          steps += 1;
+
+          leftAgent.update(state, leftAction, result.rewardLeft, result.next_state, false);
+          rightAgent.update(state, rightAction, result.rewardRight, result.next_state, false);
+          state = result.next_state;
+
+          if (result.done) {
+            episode += 1;
+            if (slime1Score > slime2Score) leftWins += 1;
+            else if (slime2Score > slime1Score) rightWins += 1;
+            console.log('EP ' + episode + ' leftWins=' + leftWins + ' rightWins=' + rightWins +
+              ' steps=' + steps + ' leftEps=' + leftAgent.getEpsilon() + ' rightEps=' + rightAgent.getEpsilon());
+            steps = 0;
+            state = env.reset(true);
+          }
+        }, updateMs);
+
+        return {
+          env: env,
+          leftAgent: leftAgent,
+          rightAgent: rightAgent,
+          stop: function() {
+            clearInterval(intervalId);
+          }
+        };
+      };
+    }
+
+    setInterval(gameIteration, 20);
+  }  
+
+
+      
+</script>
+</head><body onload="bodyload()">
+</body></html>
